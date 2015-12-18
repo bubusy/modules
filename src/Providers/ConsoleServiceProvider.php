@@ -6,8 +6,8 @@ use Illuminate\Support\ServiceProvider;
 class ConsoleServiceProvider extends ServiceProvider
 {
 	/**
-	* @var bool $defer Indicates if loading of the provider is deferred.
-	*/
+	 * @var bool $defer Indicates if loading of the provider is deferred.
+	 */
 	protected $defer = false;
 
 	/**
@@ -166,7 +166,7 @@ class ConsoleServiceProvider extends ServiceProvider
 	protected function registerMigrateRollbackCommand()
 	{
 		$this->app->bindShared('modules.migrateRollback', function($app) {
-			return new \Caffeinated\Modules\Console\Commands\ModuleMigrateRollbackCommand($app['modules']);
+			return new \Caffeinated\Modules\Console\Commands\ModuleMigrateRollbackCommand($app['modules'], $app['migrator']);
 		});
 	}
 
@@ -193,7 +193,7 @@ class ConsoleServiceProvider extends ServiceProvider
 			return new \Caffeinated\Modules\Console\Commands\ModuleListCommand($app['modules']);
 		});
 	}
-	
+
 	/**
 	 * Register the "module:make:controller" console command.
 	 *
@@ -207,5 +207,5 @@ class ConsoleServiceProvider extends ServiceProvider
 			return new \Caffeinated\Modules\Console\Commands\ModuleMakeControllerCommand($handler);
 		});
 	}
-	
+
 }

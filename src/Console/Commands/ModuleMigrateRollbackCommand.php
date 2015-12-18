@@ -5,6 +5,7 @@ use Caffeinated\Modules\Modules;
 use Caffeinated\Modules\Traits\MigrationTrait;
 use Illuminate\Console\ConfirmableTrait;
 use Illuminate\Console\Command;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputArgument;
@@ -29,15 +30,22 @@ class ModuleMigrateRollbackCommand extends Command
 	protected $module;
 
 	/**
+	 * @var \Illuminate\Database\Migrations\Migrator;
+	 */
+	protected $migrator;
+
+
+	/**
 	 * Create a new command instance.
 	 *
 	 * @param \Caffeinated\Modules\Modules $module
 	 */
-	public function __construct(Modules $module)
+	public function __construct(Modules $module, Migrator $migrator)
 	{
 		parent::__construct();
 
 		$this->module = $module;
+		$this->migrator = $migrator;
 	}
 
 	/**
@@ -47,7 +55,7 @@ class ModuleMigrateRollbackCommand extends Command
 	 */
 	public function fire()
 	{
-        if (! $this->confirmToProceed()) return null;
+		if (! $this->confirmToProceed()) return null;
 
 		$module = $this->argument('module');
 
@@ -70,13 +78,44 @@ class ModuleMigrateRollbackCommand extends Command
 	{
 		$moduleName = Str::studly($slug);
 
-		$this->requireMigrations($moduleName);
+		$pretend = $this->input->getOption('pretend');
 
-		$this->call('migrate:rollback', [
-			'--database' => $this->option('database'),
-			'--force'    => $this->option('force'),
-			'--pretend'  => $this->option('pretend'),
-		]);
+		$this->requireMigrations($moduleName);
+		$migrationPath = $this->getMigrationPath($slug);
+		$migrations = array_reverse($this->migrator->getMigrationFiles($migrationPath));
+
+		if (count($migrations) == 0) {
+			$this->info('Nothing to rollback.');
+			return;
+		}
+		$this->runDown($slug, $migrations[0], $pretend);
+		$this->info('Migrate: [' . $slug . ']' . $migrations[0]);
+
+	}
+
+	/**
+	 * Run "down" a migration instance.
+	 *
+	 * @param  string $slug
+	 * @param  object $migration
+	 * @param  bool   $pretend
+	 * @return void
+	 */
+	protected function runDown($slug, $migration, $pretend)
+	{
+		$migrationPath = $this->getMigrationPath($slug);
+		$file          = (string) $migrationPath.'/'.$migration.'.php';
+		$classFile     = implode('_', array_slice(explode('_', basename($file, '.php')), 4));
+		$class         = studly_case($classFile);
+		$table         = $this->laravel['config']['database.migrations'];
+
+		$instance = new $class;
+		$instance->down();
+
+		$this->laravel['db']->table($table)
+			->where('migration', $migration)
+			->delete();
+
 	}
 
 	/**
