@@ -84,12 +84,17 @@ class ModuleMigrateRollbackCommand extends Command
 		$migrationPath = $this->getMigrationPath($slug);
 		$migrations = array_reverse($this->migrator->getMigrationFiles($migrationPath));
 
+		$migrations = $this->getLatestMigrations($migrations);
+
 		if (count($migrations) == 0) {
 			$this->info('Nothing to rollback.');
 			return;
 		}
-		$this->runDown($slug, $migrations[0], $pretend);
-		$this->info('Migrate: [' . $slug . ']' . $migrations[0]);
+
+		foreach ($migrations as $migration) {
+			$this->runDown($slug, $migration->migration, $pretend);
+			$this->info('Migrate: [' . $slug . ']' . $migration->migration);
+		}
 
 	}
 
@@ -116,6 +121,37 @@ class ModuleMigrateRollbackCommand extends Command
 			->where('migration', $migration)
 			->delete();
 
+	}
+
+	/**
+	 *
+	 * find latest migrations
+	 *
+	 * @param $migrations
+	 * @return array
+	 */
+	protected function getLatestMigrations($migrations){
+		$table = $this->laravel['config']['database.migrations'];
+		$migration_records = [];
+		$batch = 0;
+		foreach ($migrations as $migration) {
+			$migration_record = $this->laravel['db']->table($table)
+				->where('migration', $migration)->first();
+			if ($migration_record) {
+				if ($batch == 0) {
+					$batch = $migration_record->batch;
+					break;
+				}
+			}
+		}
+		foreach ($migrations as $migration) {
+			$migration_record = $this->laravel['db']->table($table)
+				->where('migration', $migration)->where('batch', $batch)->first();
+			if ($migration_record) {
+				array_unshift($migration_records, $migration_record);
+			}
+		}
+		return $migration_records;
 	}
 
 	/**
